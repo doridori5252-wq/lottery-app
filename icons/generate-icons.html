@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h2>Right-click each image → Save As</h2>
+<p>Save as: <b>icon-192.png</b></p>
+<canvas id="c192" width="192" height="192"></canvas>
+<br><br>
+<p>Save as: <b>icon-512.png</b></p>
+<canvas id="c512" width="512" height="512"></canvas>
+<script>
+function drawIcon(canvas) {
+  const ctx = canvas.getContext('2d');
+  const s = canvas.width;
+
+  // Background gradient
+  const grad = ctx.createLinearGradient(0, 0, s, s);
+  grad.addColorStop(0, '#0a0a2e');
+  grad.addColorStop(1, '#1a1a4a');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, s, s, s * 0.2);
+  ctx.fill();
+
+  // Clover emoji
+  ctx.font = `${s * 0.45}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🍀', s/2, s * 0.38);
+
+  // Text "LuckyAI"
+  ctx.font = `900 ${s * 0.13}px sans-serif`;
+  const tGrad = ctx.createLinearGradient(s*0.2, 0, s*0.8, 0);
+  tGrad.addColorStop(0, '#f7d046');
+  tGrad.addColorStop(0.5, '#ff6b6b');
+  tGrad.addColorStop(1, '#4ecdc4');
+  ctx.fillStyle = tGrad;
+  ctx.fillText('LuckyAI', s/2, s * 0.68);
+
+  // Sub text
+  ctx.font = `700 ${s * 0.06}px sans-serif`;
+  ctx.fillStyle = '#888';
+  ctx.fillText('LOTTO', s/2, s * 0.82);
+
+  // Convert to image for saving
+  const img = new Image();
+  img.src = canvas.toDataURL('image/png');
+  canvas.parentNode.insertBefore(img, canvas.nextSibling);
+}
+
+drawIcon(document.getElementById('c192'));
+drawIcon(document.getElementById('c512'));
+</script>
+</body>
+</html>

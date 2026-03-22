@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a1a">
+  <title>LuckyAI Lotto</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Splash Screen -->
+  <div id="splash" class="splash">
+    <div class="splash-content">
+      <div class="splash-icon">🍀</div>
+      <h1>LuckyAI Lotto</h1>
+      <p>AI-Powered Lottery Generator</p>
+      <div class="splash-loader"><div></div></div>
+    </div>
+  </div>
+
+  <!-- App Shell -->
+  <div id="app" class="app hidden">
+
+    <!-- ===== PAGE: HOME ===== -->
+    <section class="page active" id="page-home">
+      <header class="top-bar">
+        <h1 class="logo">🍀 LuckyAI</h1>
+        <button class="icon-btn" onclick="navigateTo('settings')">⚙️</button>
+      </header>
+
+      <!-- Jackpot Banner -->
+      <div class="jackpot-banner">
+        <div class="jackpot-slide active" data-game="powerball">
+          <div class="jackpot-flag">US</div>
+          <div class="jackpot-info">
+            <span class="jackpot-name">Powerball</span>
+            <span class="jackpot-amount" id="jackpot-pb">로딩중...</span>
+            <span class="jackpot-date">추첨: 월·수·토 (미국시간)</span>
+          </div>
+        </div>
+        <div class="jackpot-slide" data-game="mega">
+          <div class="jackpot-flag">US</div>
+          <div class="jackpot-info">
+            <span class="jackpot-name">Mega Millions</span>
+            <span class="jackpot-amount" id="jackpot-mm">로딩중...</span>
+            <span class="jackpot-date">추첨: 화·금 (미국시간)</span>
+          </div>
+        </div>
+        <div class="jackpot-slide" data-game="lotto">
+          <div class="jackpot-flag">KR</div>
+          <div class="jackpot-info">
+            <span class="jackpot-name">로또 6/45</span>
+            <span class="jackpot-amount" id="jackpot-kr">로딩중...</span>
+            <span class="jackpot-date">추첨: 매주 토요일 오후 8:45</span>
+          </div>
+        </div>
+        <div class="jackpot-dots">
+          <span class="dot active"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
+
+      <!-- AI Today's Pick -->
+      <div class="section-header">
+        <h2>🤖 오늘의 AI 추천번호</h2>
+        <button class="refresh-btn" onclick="refreshTodayPick()">↻ 새로고침</button>
+      </div>
+
+      <div class="today-picks" id="today-picks">
+        <!-- Filled by JS -->
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="quick-actions">
+        <button class="quick-card" onclick="quickGenerate('powerball')">
+          <div class="quick-icon pb-gradient">PB</div>
+          <span>Powerball</span>
+          <small>Quick Pick</small>
+        </button>
+        <button class="quick-card" onclick="quickGenerate('mega')">
+          <div class="quick-icon mm-gradient">MM</div>
+          <span>Mega Millions</span>
+          <small>Quick Pick</small>
+        </button>
+        <button class="quick-card" onclick="quickGenerate('lotto')">
+          <div class="quick-icon kr-gradient">로또</div>
+          <span>Korean Lotto</span>
+          <small>Quick Pick</small>
+        </button>
+      </div>
+
+      <!-- Recent Results -->
+      <div class="section-header">
+        <h2>📋 최근 당첨번호</h2>
+        <button class="text-btn" onclick="navigateTo('results')">전체보기 →</button>
+      </div>
+      <div class="recent-results" id="recent-results">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- ===== PAGE: GENERATOR ===== -->
+    <section class="page" id="page-generator">
+      <header class="top-bar">
+        <h1>🎰 번호 생성</h1>
+      </header>
+
+      <!-- Game Selector -->
+      <div class="game-selector">
+        <button class="game-chip active" data-game="powerball" onclick="selectGame('powerball')">
+          <span class="chip-flag">🇺🇸</span> Powerball
+        </button>
+        <button class="game-chip" data-game="mega" onclick="selectGame('mega')">
+          <span class="chip-flag">🇺🇸</span> Mega Millions
+        </button>
+        <button class="game-chip" data-game="lotto" onclick="selectGame('lotto')">
+          <span class="chip-flag">🇰🇷</span> 로또 6/45
+        </button>
+      </div>
+
+      <!-- Algorithm Selector -->
+      <div class="algo-section">
+        <h3>🧠 생성 알고리즘</h3>
+        <div class="algo-grid">
+          <button class="algo-card active" data-algo="random" onclick="selectAlgo('random')">
+            <div class="algo-icon">🎲</div>
+            <span>확률랜덤</span>
+            <small>패턴 필터링</small>
+          </button>
+          <button class="algo-card" data-algo="hot" onclick="selectAlgo('hot')">
+            <div class="algo-icon">🔥</div>
+            <span>고빈도</span>
+            <small>베이지안+트렌드</small>
+          </button>
+          <button class="algo-card" data-algo="cold" onclick="selectAlgo('cold')">
+            <div class="algo-icon">❄️</div>
+            <span>미출현</span>
+            <small>포아송+갭분석</small>
+          </button>
+          <button class="algo-card" data-algo="ai" onclick="selectAlgo('ai')">
+            <div class="algo-icon">🧬</div>
+            <span>과학예측</span>
+            <small>5중 확률엔진</small>
+          </button>
+          <button class="algo-card" data-algo="lucky" onclick="selectAlgo('lucky')">
+            <div class="algo-icon">🍀</div>
+            <span>행운번호</span>
+            <small>월별 행운</small>
+          </button>
+        </div>
+      </div>
+
+      <!-- Set Count -->
+      <div class="set-count-bar">
+        <span>생성 세트 수</span>
+        <div class="stepper">
+          <button class="step-btn" onclick="adjustSets(-1)">−</button>
+          <span class="step-val" id="gen-set-count">5</span>
+          <button class="step-btn" onclick="adjustSets(1)">+</button>
+        </div>
+      </div>
+
+      <!-- Generate Button -->
+      <button class="big-generate-btn" id="gen-btn" onclick="generateNumbers()">
+        <span class="gen-text">번호 생성하기</span>
+        <span class="gen-sub" id="gen-sub-text">랜덤 · Powerball · 5세트</span>
+      </button>
+
+      <!-- Results Area -->
+      <div class="gen-results" id="gen-results">
+        <!-- Filled by JS -->
+      </div>
+
+      <!-- Save All Button (hidden until generated) -->
+      <button class="save-all-btn hidden" id="save-all-btn" onclick="saveAllGenerated()">
+        💾 전체 저장하기
+      </button>
+    </section>
+
+    <!-- ===== PAGE: STATS ===== -->
+    <section class="page" id="page-stats">
+      <header class="top-bar">
+        <h1>📊 통계 분석</h1>
+      </header>
+
+      <!-- Stats Game Selector -->
+      <div class="game-selector">
+        <button class="game-chip active" data-game="powerball" onclick="selectStatsGame('powerball')">
+          🇺🇸 Powerball
+        </button>
+        <button class="game-chip" data-game="mega" onclick="selectStatsGame('mega')">
+          🇺🇸 Mega Millions
+        </button>
+        <button class="game-chip" data-game="lotto" onclick="selectStatsGame('lotto')">
+          🇰🇷 로또
+        </button>
+      </div>
+
+      <!-- Frequency Chart -->
+      <div class="stats-card">
+        <h3>📈 번호별 출현 빈도 <span id="freq-rounds-info" style="font-size:0.7em;color:#888">(전체)</span></h3>
+        <canvas id="freq-chart" width="400" height="250"></canvas>
+      </div>
+
+      <!-- Hot & Cold Numbers -->
+      <div class="hot-cold-row">
+        <div class="stats-card half">
+          <h3>🔥 Hot Numbers</h3>
+          <div class="hot-cold-balls" id="hot-numbers"></div>
+        </div>
+        <div class="stats-card half">
+          <h3>❄️ Cold Numbers</h3>
+          <div class="hot-cold-balls" id="cold-numbers"></div>
+        </div>
+      </div>
+
+      <!-- Odd/Even Ratio -->
+      <div class="stats-card">
+        <h3>⚖️ 홀짝 비율 분석</h3>
+        <div class="ratio-bar-container">
+          <div class="ratio-bar">
+            <div class="ratio-fill odd" id="odd-bar" style="width:50%">홀 50%</div>
+            <div class="ratio-fill even" id="even-bar" style="width:50%">짝 50%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Number Range Distribution -->
+      <div class="stats-card">
+        <h3>📊 구간별 분포</h3>
+        <canvas id="range-chart" width="400" height="200"></canvas>
+      </div>
+
+      <!-- Consecutive Numbers -->
+      <div class="stats-card">
+        <h3>🔗 연속번호 출현율</h3>
+        <div class="consecutive-stats" id="consecutive-stats"></div>
+      </div>
+
+      <!-- AI Probability -->
+      <div class="stats-card ai-prob-card">
+        <h3>🤖 AI 1등 확률 분석</h3>
+        <div class="ai-prob-content" id="ai-prob-content">
+          <div class="prob-meter">
+            <div class="prob-fill" id="prob-fill"></div>
+          </div>
+          <p class="prob-text" id="prob-text"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PAGE: MY NUMBERS ===== -->
+    <section class="page" id="page-mynums">
+      <header class="top-bar">
+        <h1>💰 내 번호</h1>
+        <button class="icon-btn" onclick="clearAllSaved()">🗑️</button>
+      </header>
+
+      <!-- Saved Numbers Filter -->
+      <div class="game-selector">
+        <button class="game-chip active" data-filter="all" onclick="filterSaved('all')">전체</button>
+        <button class="game-chip" data-filter="powerball" onclick="filterSaved('powerball')">Powerball</button>
+        <button class="game-chip" data-filter="mega" onclick="filterSaved('mega')">Mega Millions</button>
+        <button class="game-chip" data-filter="lotto" onclick="filterSaved('lotto')">로또</button>
+      </div>
+
+      <!-- Saved List -->
+      <div class="saved-list" id="saved-list">
+        <div class="empty-state" id="empty-saved">
+          <div class="empty-icon">📝</div>
+          <p>저장된 번호가 없습니다</p>
+          <small>번호를 생성하고 저장해보세요!</small>
+          <button class="action-btn" onclick="navigateTo('generator')">번호 생성하러 가기 →</button>
+        </div>
+      </div>
+
+      <!-- Check Results -->
+      <button class="check-results-btn hidden" id="check-btn" onclick="checkMyResults()">
+        🏆 당첨 확인하기
+      </button>
+    </section>
+
+    <!-- ===== PAGE: SETTINGS ===== -->
+    <section class="page" id="page-settings">
+      <header class="top-bar">
+        <button class="icon-btn" onclick="navigateTo('home')">←</button>
+        <h1>⚙️ 설정</h1>
+      </header>
+
+      <div class="settings-list">
+        <div class="settings-group">
+          <h3>일반</h3>
+          <div class="setting-item">
+            <span>🌙 다크 모드</span>
+            <label class="toggle">
+              <input type="checkbox" id="darkmode-toggle" checked onchange="toggleDarkMode()">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <span>🌐 언어</span>
+            <select id="lang-select" onchange="changeLang()">
+              <option value="ko" selected>한국어</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h3>게임 설정</h3>
+          <div class="setting-item">
+            <span>🔢 기본 세트 수</span>
+            <select id="default-sets" onchange="saveSettings()">
+              <option value="1">1세트</option>
+              <option value="3">3세트</option>
+              <option value="5" selected>5세트</option>
+              <option value="10">10세트</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <span>🎵 효과음</span>
+            <label class="toggle">
+              <input type="checkbox" id="sound-toggle" checked onchange="saveSettings()">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h3>데이터</h3>
+          <div class="setting-item clickable" onclick="forceRefreshResults()">
+            <span>📡 당첨번호 새로고침</span>
+            <span class="arrow">→</span>
+          </div>
+          <div class="setting-item clickable" onclick="exportData()">
+            <span>📤 데이터 내보내기</span>
+            <span class="arrow">→</span>
+          </div>
+          <div class="setting-item clickable" onclick="resetApp()">
+            <span>🔄 앱 초기화</span>
+            <span class="arrow">→</span>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h3>정보</h3>
+          <div class="setting-item">
+            <span>📱 버전</span>
+            <span class="setting-val">1.0.0</span>
+          </div>
+          <div class="setting-item">
+            <span>⚠️ 주의</span>
+            <span class="setting-val disclaimer">복권은 오락 목적입니다</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PAGE: RESULTS (당첨번호) ===== -->
+    <section class="page" id="page-results">
+      <header class="top-bar">
+        <button class="icon-btn" onclick="navigateTo('home')">←</button>
+        <h1>📋 당첨번호</h1>
+      </header>
+      <div class="game-selector">
+        <button class="game-chip active" data-game="powerball" onclick="selectResultGame('powerball')">🇺🇸 Powerball</button>
+        <button class="game-chip" data-game="mega" onclick="selectResultGame('mega')">🇺🇸 Mega Millions</button>
+        <button class="game-chip" data-game="lotto" onclick="selectResultGame('lotto')">🇰🇷 로또</button>
+      </div>
+      <div class="results-list" id="results-list"></div>
+    </section>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-page="home" onclick="navigateTo('home')">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">홈</span>
+      </button>
+      <button class="nav-item" data-page="generator" onclick="navigateTo('generator')">
+        <span class="nav-icon">🎰</span>
+        <span class="nav-label">생성</span>
+      </button>
+      <button class="nav-item" data-page="stats" onclick="navigateTo('stats')">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">통계</span>
+      </button>
+      <button class="nav-item" data-page="mynums" onclick="navigateTo('mynums')">
+        <span class="nav-icon">💰</span>
+        <span class="nav-label">내번호</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Confetti Canvas -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Toast -->
+  <div class="toast hidden" id="toast"></div>
+
+  <!-- Modal -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal" id="modal">
+      <div class="modal-header" id="modal-header"></div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
+
+  <script src="js/lotto-history.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.log('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
