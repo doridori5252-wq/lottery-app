@@ -29,3 +29,18 @@ const LOTTO_COLD_NUMS = Object.entries(LOTTO_FULL_FREQ)
 const LOTTO_HOT_BONUS = Object.entries(LOTTO_FULL_FREQ)
   .sort((a, b) => b[1][1] - a[1][1])
   .map(e => parseInt(e[0]));
+
+// Pre-computed top co-occurring pairs (recent 51 rounds, auto-updated by GitHub Actions)
+// Format: { pair: [a, b], count: N }
+const LOTTO_TOP_PAIRS = [
+  {pair:[27,38],count:6},{pair:[27,36],count:5},{pair:[7,9],count:5},
+  {pair:[25,31],count:4},{pair:[16,23],count:4},{pair:[16,31],count:4},
+  {pair:[9,24],count:4},{pair:[15,19],count:3},{pair:[15,27],count:3},
+  {pair:[15,33],count:3},{pair:[30,33],count:3},{pair:[8,31],count:3},
+  {pair:[23,27],count:3},{pair:[23,40],count:3},{pair:[7,27],count:3},
+  {pair:[17,27],count:3},{pair:[35,39],count:3},{pair:[6,27],count:3},
+  {pair:[27,42],count:3},{pair:[3,27],count:3},{pair:[3,42],count:3},
+  {pair:[1,4],count:3},{pair:[23,31],count:3},{pair:[16,28],count:3},
+  {pair:[3,6],count:3},{pair:[6,29],count:3},{pair:[12,40],count:3},
+  {pair:[33,37],count:3},{pair:[37,40],count:3},{pair:[9,35],count:3}
+];

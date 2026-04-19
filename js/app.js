@@ -510,6 +510,12 @@ function getPairScore(game, candidate, existingNums) {
 
 // Compute top N most-frequently co-appearing pairs from historical data
 function getTopPairs(game, topN = 30) {
+  // Korean Lotto: use pre-computed full-history pairs (lotto-history.js)
+  if (game === 'lotto' && typeof LOTTO_TOP_PAIRS !== 'undefined' && LOTTO_TOP_PAIRS.length > 0) {
+    return LOTTO_TOP_PAIRS.slice(0, topN);
+  }
+
+  // US lotteries (and fallback): compute dynamically from loaded results
   const data = pastResults[game] || [];
   const pairCount = {};
 

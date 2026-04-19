@@ -360,8 +360,37 @@ async function main() {
       }
     }
 
+    // Recompute LOTTO_TOP_PAIRS from updated STATIC_LOTTO_DATA
+    const allEntries = [];
+    const entryRegex2 = /\{round:(\d+),date:'([^']+)',main:\[([^\]]+)\],special:(\d+)\}/g;
+    let em2;
+    while ((em2 = entryRegex2.exec(appContent)) !== null) {
+      allEntries.push({ main: em2[3].split(',').map(Number) });
+    }
+    const pairCount = {};
+    for (const r of allEntries) {
+      const nums = [...r.main].sort((a, b) => a - b);
+      for (let i = 0; i < nums.length; i++) {
+        for (let j = i + 1; j < nums.length; j++) {
+          const k = `${nums[i]},${nums[j]}`;
+          pairCount[k] = (pairCount[k] || 0) + 1;
+        }
+      }
+    }
+    const topPairs = Object.entries(pairCount)
+      .filter(([, c]) => c >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30)
+      .map(([k, c]) => `{pair:[${k}],count:${c}}`);
+
+    const pairsLine = `const LOTTO_TOP_PAIRS = [\n  ${topPairs.join(',')}\n];`;
+    historyContent = historyContent.replace(
+      /const LOTTO_TOP_PAIRS = \[[\s\S]*?\];/,
+      pairsLine
+    );
+
     fs.writeFileSync(HISTORY_JS, historyContent, 'utf-8');
-    console.log('📊 Updated frequency data');
+    console.log(`📊 Updated frequency data + top ${topPairs.length} pairs`);
   }
 
   // Update SW cache version with today's date
