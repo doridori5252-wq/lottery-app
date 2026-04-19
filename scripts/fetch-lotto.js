@@ -102,33 +102,28 @@ async function fetchFromLottolyzer(maxRound, minRound) {
 
       for (const row of rows) {
         const cells = [];
-        const cellRegex = /<td[^>]*>\s*([^<]+?)\s*<\/td>/gi;
+        const cellRegex = /<td[^>]*>\s*([^<\s][^<]*?)\s*<\/td>/gi;
         let m;
         while ((m = cellRegex.exec(row)) !== null) {
           cells.push(m[1].trim());
         }
 
-        // Expect: [round, date, n1, n2, n3, n4, n5, n6, bonus]
-        if (cells.length < 9) continue;
+        // lottolyzer format: [round, date, "n1,n2,n3,n4,n5,n6", bonus, ...]
+        if (cells.length < 4) continue;
         const round = parseInt(cells[0]);
-        if (isNaN(round) || round < minRound || round > maxRound) continue;
+        if (isNaN(round) || !/^\d{3,4}$/.test(cells[0])) continue;
+        if (round < minRound || round > maxRound) continue;
 
-        const nums = cells.slice(2, 8).map(Number);
-        const bonus = parseInt(cells[8]);
-        if (nums.some(isNaN) || nums.some(n => n < 1 || n > 45)) continue;
+        // cells[2] is all 6 numbers as comma-separated string
+        const nums = cells[2].split(',').map(Number);
+        const bonus = parseInt(cells[3]);
+        if (nums.length !== 6 || nums.some(isNaN) || nums.some(n => n < 1 || n > 45)) continue;
         if (isNaN(bonus) || bonus < 1 || bonus > 45) continue;
-
-        // Parse date (e.g. "14 Mar 2026")
-        const dateStr = cells[1];
-        const parsedDate = new Date(dateStr);
-        const dateFormatted = isNaN(parsedDate)
-          ? dateStr
-          : parsedDate.toISOString().split('T')[0];
 
         results.push({
           round,
-          date: dateFormatted,
-          main: nums.sort((a, b) => a - b),
+          date: cells[1], // already YYYY-MM-DD
+          main: [...nums].sort((a, b) => a - b),
           special: bonus,
         });
       }
@@ -178,7 +173,8 @@ function getCurrentRounds() {
 
 // Update STATIC_LOTTO_DATA in app.js
 function updateAppJs(newEntries, existingContent) {
-  const match = existingContent.match(/(const STATIC_LOTTO_DATA = \[)\n([\s\S]*?)(\];)/);
+  // Support both LF and CRLF line endings
+  const match = existingContent.match(/(const STATIC_LOTTO_DATA = \[)\r?\n([\s\S]*?)(\];)/);
   if (!match) {
     console.log('Could not find STATIC_LOTTO_DATA in app.js');
     return existingContent;
@@ -217,7 +213,7 @@ function updateAppJs(newEntries, existingContent) {
   ).join(',\n');
 
   return existingContent.replace(
-    /(const STATIC_LOTTO_DATA = \[)\n[\s\S]*?(\];)/,
+    /(const STATIC_LOTTO_DATA = \[)\r?\n[\s\S]*?(\];)/,
     `$1\n${lines}\n$2`
   );
 }

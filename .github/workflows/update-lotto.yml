@@ -2,11 +2,11 @@ name: Update Korean Lotto Data
 
 on:
   schedule:
-    # Every Saturday at 21:30 KST (12:30 UTC) — after 20:45 KST draw
+    # Every Saturday at 21:30 KST (12:30 UTC) - after 20:45 KST draw
     - cron: '30 12 * * 6'
-    # Every Sunday at 02:00 KST (17:00 UTC Saturday) — retry if Saturday failed
-    - cron: '0 17 * * 6'
-  workflow_dispatch: # Manual trigger button in GitHub Actions tab
+    # Retry 5 hours later if first attempt failed
+    - cron: '30 17 * * 6'
+  workflow_dispatch: # Manual trigger via GitHub Actions tab
 
 jobs:
   update-lotto:
@@ -23,9 +23,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Fetch latest Korean Lotto results
-        run: |
-          node scripts/fetch-lotto.js
+      - name: Fetch latest Korean Lotto results (via lottolyzer.com)
+        run: node scripts/fetch-lotto.js
 
       - name: Check for changes
         id: changes
@@ -38,5 +37,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add js/app.js js/lotto-history.js sw.js
-          git commit -m "auto: update Korean Lotto data $(date +%Y-%m-%d)"
+          git commit -m "auto: Korean Lotto update $(date +%Y-%m-%d) via lottolyzer"
           git push
