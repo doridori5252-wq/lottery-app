@@ -95,6 +95,15 @@
         </button>
       </div>
 
+      <!-- Simpsons Prediction Numbers -->
+      <div class="section-header">
+        <h2>📺 심슨 예측번호</h2>
+        <small style="color:#888">The Simpsons에 등장한 복권 번호</small>
+      </div>
+      <div class="simpsons-picks" id="simpsons-picks">
+        <!-- Filled by JS -->
+      </div>
+
       <!-- Recent Results -->
       <div class="section-header">
         <h2>📋 최근 당첨번호</h2>
@@ -152,6 +161,11 @@
             <div class="algo-icon">🍀</div>
             <span>행운번호</span>
             <small>월별 행운</small>
+          </button>
+          <button class="algo-card" data-algo="pattern" onclick="selectAlgo('pattern')">
+            <div class="algo-icon">🔗</div>
+            <span>패턴조합</span>
+            <small>반복 조합분석</small>
           </button>
         </div>
       </div>
@@ -218,6 +232,12 @@
           <h3>❄️ Cold Numbers</h3>
           <div class="hot-cold-balls" id="cold-numbers"></div>
         </div>
+      </div>
+
+      <!-- Top Pairs -->
+      <div class="stats-card">
+        <h3>🔗 자주 같이 나온 번호 조합 <span id="top-pairs-label" style="font-size:0.7em;color:#888"></span></h3>
+        <div id="top-pairs-list" class="top-pairs-list"></div>
       </div>
 
       <!-- Odd/Even Ratio -->

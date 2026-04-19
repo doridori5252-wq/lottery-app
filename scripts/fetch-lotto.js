@@ -10,16 +10,19 @@ const HISTORY_JS = path.join(__dirname, '..', 'js', 'lotto-history.js');
 
 // Try multiple sources to get Korean Lotto data
 async function fetchLottoRound(round) {
+  const lottoUrl = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${round}`;
+
   const sources = [
-    // Source 1: Direct dhlottery API
+    // Source 1: Direct dhlottery API (works if run from KR IP)
     async () => {
-      const url = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${round}`;
-      const res = await fetch(url, {
+      const res = await fetch(lottoUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json, text/plain, */*',
           'Accept-Language': 'ko-KR,ko;q=0.9',
+          'Referer': 'https://www.dhlottery.co.kr/',
         },
+        signal: AbortSignal.timeout(8000),
       });
       const data = await res.json();
       if (data.returnValue !== 'success') throw new Error('Not success');
@@ -27,16 +30,37 @@ async function fetchLottoRound(round) {
     },
     // Source 2: allorigins proxy
     async () => {
-      const lottoUrl = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${round}`;
-      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(lottoUrl)}`);
+      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(lottoUrl)}`, {
+        signal: AbortSignal.timeout(10000),
+      });
       const data = await res.json();
       if (data.returnValue !== 'success') throw new Error('Not success');
       return data;
     },
-    // Source 3: corsproxy
+    // Source 3: corsproxy.io
     async () => {
-      const lottoUrl = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${round}`;
-      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(lottoUrl)}`);
+      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(lottoUrl)}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await res.json();
+      if (data.returnValue !== 'success') throw new Error('Not success');
+      return data;
+    },
+    // Source 4: thingproxy
+    async () => {
+      const res = await fetch(`https://thingproxy.freeboard.io/fetch/${lottoUrl}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await res.json();
+      if (data.returnValue !== 'success') throw new Error('Not success');
+      return data;
+    },
+    // Source 5: proxy.cors.sh
+    async () => {
+      const res = await fetch(lottoUrl, {
+        headers: { 'x-cors-api-key': 'temp_test', 'Origin': 'https://localhost' },
+        signal: AbortSignal.timeout(10000),
+      });
       const data = await res.json();
       if (data.returnValue !== 'success') throw new Error('Not success');
       return data;
@@ -51,6 +75,69 @@ async function fetchLottoRound(round) {
     }
   }
   return null;
+}
+
+// Scrape latest results from lottolyzer.com (accessible from non-KR IPs)
+async function fetchFromLottolyzer(maxRound, minRound) {
+  const results = [];
+  const perPage = 20;
+  const pages = Math.ceil((maxRound - minRound + 1) / perPage);
+
+  for (let page = 1; page <= Math.min(pages, 5); page++) {
+    try {
+      const url = `https://en.lottolyzer.com/history/south-korea/6_slash_45-lotto/page/${page}/per-page/${perPage}`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      const html = await res.text();
+
+      // Parse table rows — lottolyzer format:
+      // <tr><td>1215</td><td>14 Mar 2026</td><td>13</td>...<td>45</td><td>39</td></tr>
+      const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
+      const rows = html.match(rowRegex) || [];
+
+      for (const row of rows) {
+        const cells = [];
+        const cellRegex = /<td[^>]*>\s*([^<]+?)\s*<\/td>/gi;
+        let m;
+        while ((m = cellRegex.exec(row)) !== null) {
+          cells.push(m[1].trim());
+        }
+
+        // Expect: [round, date, n1, n2, n3, n4, n5, n6, bonus]
+        if (cells.length < 9) continue;
+        const round = parseInt(cells[0]);
+        if (isNaN(round) || round < minRound || round > maxRound) continue;
+
+        const nums = cells.slice(2, 8).map(Number);
+        const bonus = parseInt(cells[8]);
+        if (nums.some(isNaN) || nums.some(n => n < 1 || n > 45)) continue;
+        if (isNaN(bonus) || bonus < 1 || bonus > 45) continue;
+
+        // Parse date (e.g. "14 Mar 2026")
+        const dateStr = cells[1];
+        const parsedDate = new Date(dateStr);
+        const dateFormatted = isNaN(parsedDate)
+          ? dateStr
+          : parsedDate.toISOString().split('T')[0];
+
+        results.push({
+          round,
+          date: dateFormatted,
+          main: nums.sort((a, b) => a - b),
+          special: bonus,
+        });
+      }
+    } catch (e) {
+      console.log(`  lottolyzer page ${page} failed:`, e.message);
+    }
+  }
+
+  return results;
 }
 
 function parseLottoData(data) {
@@ -218,30 +305,21 @@ async function main() {
   }
 
   if (newEntries.length === 0) {
-    console.log('⚠️ Could not fetch any new rounds from APIs.');
-    console.log('Trying lottolyzer.com...');
-
-    // Fallback: try to get from lottolyzer
+    console.log('⚠️ Direct APIs failed. Trying lottolyzer.com scraping...');
     try {
-      const res = await fetch('https://en.lottolyzer.com/history/south-korea/6_slash_45-lotto');
-      const html = await res.text();
-
-      // Parse the HTML for draw data
-      // Look for patterns like: round number, date, and 6 numbers + bonus
-      const drawRegex = /(\d{4})\s*<\/td>\s*<td[^>]*>\s*(\d{4}-\d{2}-\d{2})/g;
-      let match;
-      while ((match = drawRegex.exec(html)) !== null) {
-        const round = parseInt(match[1]);
-        if (round > maxCurrent && round <= latestRound) {
-          console.log(`  Found round ${round} on lottolyzer`);
+      const lottolyzerData = await fetchFromLottolyzer(latestRound, maxCurrent + 1);
+      for (const entry of lottolyzerData) {
+        if (entry.round > maxCurrent) {
+          newEntries.push(entry);
+          console.log(`  ✅ [lottolyzer] Round ${entry.round}: ${entry.main.join(',')} + ${entry.special}`);
         }
       }
     } catch (e) {
-      console.log('  Lottolyzer fetch failed:', e.message);
+      console.log('  Lottolyzer failed:', e.message);
     }
 
     if (newEntries.length === 0) {
-      console.log('❌ No new data available. Exiting.');
+      console.log('❌ No new data available from any source. Exiting.');
       return;
     }
   }
@@ -286,16 +364,16 @@ async function main() {
     console.log('📊 Updated frequency data');
   }
 
-  // Update SW cache version
+  // Update SW cache version with today's date
   const swPath = path.join(__dirname, '..', 'sw.js');
   let swContent = fs.readFileSync(swPath, 'utf-8');
-  const vMatch = swContent.match(/luckyai-v(\d+)/);
-  if (vMatch) {
-    const newVersion = parseInt(vMatch[1]) + 1;
-    swContent = swContent.replace(/luckyai-v\d+/, `luckyai-v${newVersion}`);
-    fs.writeFileSync(swPath, swContent, 'utf-8');
-    console.log(`🔄 SW cache version bumped to v${newVersion}`);
-  }
+  const today = new Date().toISOString().split('T')[0];
+  swContent = swContent.replace(
+    /const CACHE_VERSION = '[^']+';/,
+    `const CACHE_VERSION = '${today}';`
+  );
+  fs.writeFileSync(swPath, swContent, 'utf-8');
+  console.log(`🔄 SW cache version updated to ${today}`);
 
   console.log(`\n🎉 Done! ${newEntries.length} new rounds added.`);
 }

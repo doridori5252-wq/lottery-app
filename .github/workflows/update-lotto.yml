@@ -2,9 +2,11 @@ name: Update Korean Lotto Data
 
 on:
   schedule:
-    # Every Saturday at 21:30 KST (12:30 UTC) - after 20:45 KST draw
+    # Every Saturday at 21:30 KST (12:30 UTC) — after 20:45 KST draw
     - cron: '30 12 * * 6'
-  workflow_dispatch: # Manual trigger button
+    # Every Sunday at 02:00 KST (17:00 UTC Saturday) — retry if Saturday failed
+    - cron: '0 17 * * 6'
+  workflow_dispatch: # Manual trigger button in GitHub Actions tab
 
 jobs:
   update-lotto:
@@ -28,13 +30,13 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          git diff --quiet js/app.js js/lotto-history.js || echo "changed=true" >> $GITHUB_OUTPUT
+          git diff --quiet js/app.js js/lotto-history.js sw.js || echo "changed=true" >> $GITHUB_OUTPUT
 
       - name: Commit and push if changed
         if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add js/app.js js/lotto-history.js
+          git add js/app.js js/lotto-history.js sw.js
           git commit -m "auto: update Korean Lotto data $(date +%Y-%m-%d)"
           git push

@@ -1,4 +1,6 @@
-const CACHE_NAME = 'luckyai-v9';
+// Auto-versioning: changes every time the file is updated (GitHub Actions will modify this)
+const CACHE_VERSION = '2026-04-19';
+const CACHE_NAME = `luckyai-${CACHE_VERSION}`;
 const ASSETS = [
   './',
   './index.html',
@@ -27,7 +29,7 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Fetch: network-first for API calls, cache-first for assets
+// Fetch: Network-first for HTML/JS, cache-fallback for offline
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
@@ -41,17 +43,18 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first for static assets
+  // Network-first: always try to get latest, fallback to cache
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(response => {
-        if (response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        }
-        return response;
+    fetch(e.request).then(response => {
+      if (response.status === 200) {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+      }
+      return response;
+    }).catch(() => {
+      return caches.match(e.request).then(cached => {
+        return cached || caches.match('./index.html');
       });
-    }).catch(() => caches.match('./index.html'))
+    })
   );
 });

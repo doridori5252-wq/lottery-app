@@ -506,6 +506,104 @@ function getPairScore(game, candidate, existingNums) {
   return totalChecked > 0 ? 1 + (pairCount / totalChecked) * 0.5 : 1;
 }
 
+// ---- Pattern / Co-occurrence Analysis ----
+
+// Compute top N most-frequently co-appearing pairs from historical data
+function getTopPairs(game, topN = 30) {
+  const data = pastResults[game] || [];
+  const pairCount = {};
+
+  for (const r of data) {
+    const nums = [...r.main].sort((a, b) => a - b);
+    for (let i = 0; i < nums.length; i++) {
+      for (let j = i + 1; j < nums.length; j++) {
+        const key = `${nums[i]},${nums[j]}`;
+        pairCount[key] = (pairCount[key] || 0) + 1;
+      }
+    }
+  }
+
+  return Object.entries(pairCount)
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([key, count]) => ({ pair: key.split(',').map(Number), count }));
+}
+
+// Pattern-based generator: seeds from hot pairs + builds around co-occurring numbers
+function generatePatternBased(game, excludeSets = []) {
+  const cfg = GAMES[game];
+  const data = pastResults[game] || [];
+  const topPairs = getTopPairs(game, 40);
+
+  if (topPairs.length === 0) return generateMathBased(game, 'ai', excludeSets);
+
+  // Diversity penalty map from previously generated sets
+  const usedCount = {};
+  for (const prev of excludeSets) {
+    for (const n of prev) usedCount[n] = (usedCount[n] || 0) + 1;
+  }
+
+  // Weight pairs — higher rank + lower diversity penalty = more likely chosen
+  const pairWeights = topPairs.map((p, i) => {
+    const diversityPenalty = p.pair.reduce((acc, n) => acc * Math.pow(0.45, usedCount[n] || 0), 1);
+    return Math.pow(0.88, i) * p.count * diversityPenalty;
+  });
+
+  let bestCombo = null;
+
+  for (let attempt = 0; attempt < 350; attempt++) {
+    // 1. Pick a hot pair as the seed
+    const pairIdx = weightedPick(topPairs, [...pairWeights]);
+    const seedPair = topPairs[pairIdx].pair;
+
+    // 2. Find numbers that most often appear WITH these two numbers
+    const coOccur = {};
+    for (const r of data) {
+      if (seedPair.every(n => r.main.includes(n))) {
+        for (const n of r.main) {
+          if (!seedPair.includes(n)) coOccur[n] = (coOccur[n] || 0) + 1;
+        }
+      }
+    }
+
+    // 3. Build the full combination using co-occurrence + master score
+    const candidate = [...seedPair];
+    const remaining = Array.from({ length: cfg.mainMax }, (_, i) => i + 1)
+      .filter(n => !candidate.includes(n));
+
+    const poolWeights = remaining.map(n => {
+      const co = (coOccur[n] || 0) * 3;
+      const master = calculateMasterScore(game, n, 'ai');
+      const diversity = Math.pow(0.4, usedCount[n] || 0);
+      return Math.max(0.01, (co + master) * diversity);
+    });
+
+    const pool = [...remaining];
+    const wts = [...poolWeights];
+
+    while (candidate.length < cfg.mainCount && pool.length > 0) {
+      const idx = weightedPick(pool, wts);
+      candidate.push(pool[idx]);
+      pool.splice(idx, 1);
+      wts.splice(idx, 1);
+    }
+
+    candidate.sort((a, b) => a - b);
+
+    const tooSimilar = excludeSets.some(prev =>
+      candidate.filter(n => prev.includes(n)).length > Math.floor(cfg.mainCount / 2)
+    );
+
+    if (validateCombination(candidate, game) && !tooSimilar) {
+      if (!bestCombo) bestCombo = candidate;
+      else return candidate; // return 2nd valid combo quickly
+    }
+  }
+
+  return bestCombo || generateMathBased(game, 'ai', excludeSets);
+}
+
 // ---- Master Score Calculator ----
 // Combines all statistical models into a single probability score per number
 function calculateMasterScore(game, num, strategy) {
@@ -621,32 +719,52 @@ function validateCombination(nums, game) {
 }
 
 // ---- Master Number Generator ----
-function generateMathBased(game, strategy) {
+function generateMathBased(game, strategy, excludeSets = []) {
   const cfg = GAMES[game];
   const allNums = Array.from({ length: cfg.mainMax }, (_, i) => i + 1);
 
   // Calculate scientific score for every number
-  const scores = allNums.map(n => ({
-    num: n,
-    score: calculateMasterScore(game, n, strategy)
-  }));
-
-  // Sort by score for reference
-  scores.sort((a, b) => b.score - a.score);
+  const scoreMap = {};
+  allNums.forEach(n => {
+    scoreMap[n] = calculateMasterScore(game, n, strategy);
+  });
 
   // Build probability weights from scores
-  const weights = allNums.map(n => {
-    const s = scores.find(x => x.num === n);
-    return s ? s.score : 1;
-  });
+  const baseWeights = allNums.map(n => scoreMap[n]);
+
+  // Check if a new set overlaps too much with previously generated sets
+  function isTooSimilar(nums) {
+    for (const prev of excludeSets) {
+      const overlap = nums.filter(n => prev.includes(n)).length;
+      // Allow at most half the numbers to overlap
+      if (overlap > Math.floor(cfg.mainCount / 2)) return true;
+    }
+    return false;
+  }
+
+  // Diversity boost: penalize numbers already used in previous sets
+  function getDiversityWeights() {
+    const usedCount = {};
+    for (const prev of excludeSets) {
+      for (const n of prev) {
+        usedCount[n] = (usedCount[n] || 0) + 1;
+      }
+    }
+    return allNums.map((n, i) => {
+      const penalty = usedCount[n] ? Math.pow(0.4, usedCount[n]) : 1;
+      return baseWeights[i] * penalty;
+    });
+  }
 
   // Generate valid combinations (try up to 500 times)
   let bestCombo = null;
   let bestScore = -1;
+  let validCount = 0;
 
   for (let attempt = 0; attempt < 500; attempt++) {
     const nums = [];
     const availPool = [...allNums];
+    const weights = excludeSets.length > 0 ? getDiversityWeights() : [...baseWeights];
     const availWeights = [...weights];
 
     while (nums.length < cfg.mainCount && availPool.length > 0) {
@@ -666,27 +784,26 @@ function generateMathBased(game, strategy) {
 
     nums.sort((a, b) => a - b);
 
-    if (validateCombination(nums, game)) {
+    if (validateCombination(nums, game) && !isTooSimilar(nums)) {
+      validCount++;
       // Score this combination
-      const comboScore = nums.reduce((sum, n) => {
-        const s = scores.find(x => x.num === n);
-        return sum + (s ? s.score : 0);
-      }, 0);
+      const comboScore = nums.reduce((sum, n) => sum + (scoreMap[n] || 0), 0);
 
       if (comboScore > bestScore) {
         bestScore = comboScore;
         bestCombo = nums;
       }
 
-      // After finding 20 valid combos, pick the best one
-      if (attempt > 20 && bestCombo) return bestCombo;
+      // After finding a few valid unique combos, pick the best one
+      if (validCount >= 5 && bestCombo) return bestCombo;
     }
   }
 
   if (bestCombo) return bestCombo;
 
-  // Fallback: top scored numbers
-  return scores.slice(0, cfg.mainCount).map(s => s.num).sort((a, b) => a - b);
+  // Fallback: pick top scored numbers not heavily used in previous sets
+  const sorted = allNums.map(n => ({ num: n, score: scoreMap[n] })).sort((a, b) => b.score - a.score);
+  return sorted.slice(0, cfg.mainCount).map(s => s.num).sort((a, b) => a - b);
 }
 
 // ---- Special/Bonus Number Generator ----
@@ -728,34 +845,41 @@ function generateSpecialNum(game, strategy) {
   return allNums[idx];
 }
 
-function generateWithAlgo(game, algo, setIndex = 0) {
+function generateWithAlgo(game, algo, setIndex = 0, excludeSets = []) {
   const cfg = GAMES[game];
   let mainNums, specialNum;
 
   switch (algo) {
     case 'random':
       // Even random uses mathematical validation for realistic combinations
-      mainNums = generateMathBased(game, 'random');
+      mainNums = generateMathBased(game, 'random', excludeSets);
       specialNum = cfg.specialMax > 0 ? randInt(1, cfg.specialMax) : null;
       break;
 
     case 'hot': {
       // Frequency-weighted: historically frequent numbers get higher probability
-      mainNums = generateMathBased(game, 'hot');
+      mainNums = generateMathBased(game, 'hot', excludeSets);
       specialNum = generateSpecialNum(game, 'hot');
       break;
     }
 
     case 'cold': {
       // Due number theory: numbers below expected frequency get higher probability
-      mainNums = generateMathBased(game, 'cold');
+      mainNums = generateMathBased(game, 'cold', excludeSets);
       specialNum = generateSpecialNum(game, 'cold');
       break;
     }
 
     case 'ai': {
       // Full mathematical analysis: balanced frequency + deviation + pattern matching
-      mainNums = generateMathBased(game, 'ai');
+      mainNums = generateMathBased(game, 'ai', excludeSets);
+      specialNum = generateSpecialNum(game, 'ai');
+      break;
+    }
+
+    case 'pattern': {
+      // Pattern-based: seeds from historically co-occurring pairs
+      mainNums = generatePatternBased(game, excludeSets);
       specialNum = generateSpecialNum(game, 'ai');
       break;
     }
@@ -869,9 +993,75 @@ function navigateTo(page) {
 // ==================== HOME PAGE ====================
 function renderHome() {
   renderTodayPicks();
+  renderSimpsons();
   renderRecentResults();
   updateJackpotDisplay();
   startJackpotSlider();
+}
+
+// ==================== SIMPSONS PREDICTION NUMBERS ====================
+const SIMPSONS_NUMBERS = [
+  {
+    game: 'powerball',
+    label: 'Powerball',
+    episode: 'S3E19 "Dog of Death"',
+    nums: [17, 25, 38, 42, 49], special: 3,
+    note: '$130M 잭팟 당첨번호'
+  },
+  {
+    game: 'mega',
+    label: 'Mega Millions',
+    episode: 'S21E11 "Million Dollar Maybe"',
+    nums: [6, 17, 22, 24, 35], special: 1,
+    note: '호머 $1M 당첨'
+  },
+  {
+    game: 'powerball',
+    label: 'Powerball',
+    episode: 'S12E7 리사 퍼즐 장면',
+    nums: [14, 21, 28, 35, 42], special: 7,
+    note: '7의 배수 패턴'
+  },
+  {
+    game: 'mega',
+    label: 'Mega Millions',
+    episode: 'S28 "Trust But Clarify"',
+    nums: [17, 42, 45, 69, 83], special: 6,
+    note: '켄트 브록맨 발표'
+  },
+  {
+    game: 'powerball',
+    label: 'Powerball',
+    episode: 'S3E19 $40K 추첨',
+    nums: [6, 17, 18, 22, 29], special: 3,
+    note: '마지가 놓친 번호'
+  },
+];
+
+function renderSimpsons() {
+  const container = document.getElementById('simpsons-picks');
+  if (!container) return;
+
+  container.innerHTML = SIMPSONS_NUMBERS.map(s => {
+    const cfg = GAMES[s.game];
+    const ballsHtml = s.nums.map(n => {
+      const cls = s.game === 'lotto' ? getLottoBallClass(n) : cfg.mainClass;
+      return `<div class="ball ball-sm ${cls}">${n}</div>`;
+    }).join('');
+    const specialHtml = s.special
+      ? `<span class="sep">+</span><div class="ball ball-sm ${cfg.specialClass}">${s.special}</div>`
+      : '';
+
+    return `
+      <div class="simpsons-card">
+        <div style="flex-shrink:0;text-align:center;">
+          <div class="simpsons-badge">${cfg.flag} ${s.label}</div>
+          <div class="simpsons-ep">${s.episode}</div>
+        </div>
+        <div class="simpsons-balls">${ballsHtml}${specialHtml}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 // Convert USD to Korean format (억원)
@@ -1077,7 +1267,7 @@ function adjustSets(delta) {
 function updateGenSubText() {
   const algoNames = {
     random: '확률랜덤', hot: '고빈도분석', cold: '미출현분석',
-    ai: '과학예측', lucky: '월별행운'
+    ai: '과학예측', lucky: '월별행운', pattern: '패턴조합'
   };
   const text = `${algoNames[state.currentAlgo]} · ${GAMES[state.currentGame].name} · ${state.setCounts}세트`;
   document.getElementById('gen-sub-text').textContent = text;
@@ -1106,8 +1296,10 @@ function generateNumbers() {
   state.generatedSets = [];
   container.innerHTML = '';
 
+  const previousMainNums = []; // Track generated sets to avoid duplicates
   for (let i = 0; i < state.setCounts; i++) {
-    const result = generateWithAlgo(state.currentGame, state.currentAlgo, i);
+    const result = generateWithAlgo(state.currentGame, state.currentAlgo, i, previousMainNums);
+    previousMainNums.push(result.mainNums);
     state.generatedSets.push({
       game: state.currentGame,
       mainNums: result.mainNums,
@@ -1211,10 +1403,45 @@ function renderStats() {
   const game = state.currentStatsGame;
   renderFrequencyChart(game);
   renderHotCold(game);
+  renderTopPairs(game);
   renderOddEven(game);
   renderRangeChart(game);
   renderConsecutive(game);
   renderAIProb(game);
+}
+
+function renderTopPairs(game) {
+  const container = document.getElementById('top-pairs-list');
+  if (!container) return;
+
+  const pairs = getTopPairs(game, 15);
+  const totalRounds = (pastResults[game] || []).length;
+  const label = document.getElementById('top-pairs-label');
+  if (label) label.textContent = `(최근 ${totalRounds}회 기준)`;
+
+  if (pairs.length === 0) {
+    container.innerHTML = '<div style="color:#888;font-size:0.85em;text-align:center;padding:8px">데이터 부족</div>';
+    return;
+  }
+
+  const maxCount = pairs[0].count;
+
+  container.innerHTML = pairs.map(({ pair, count }, idx) => {
+    const pct = Math.round((count / maxCount) * 100);
+    const ballsHtml = pair.map(n =>
+      `<div class="ball ball-xs ${getBallClass(game, n, false)}">${n}</div>`
+    ).join('');
+    const rankEmoji = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`;
+    return `
+      <div class="pair-row">
+        <span class="pair-rank">${rankEmoji}</span>
+        <div class="pair-balls">${ballsHtml}</div>
+        <div class="pair-bar-wrap">
+          <div class="pair-bar" style="width:${pct}%"></div>
+        </div>
+        <span class="pair-count">${count}회</span>
+      </div>`;
+  }).join('');
 }
 
 function renderFrequencyChart(game) {
