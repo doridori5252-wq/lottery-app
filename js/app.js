@@ -254,6 +254,7 @@ async function fetchLottoRound(round, fetcher) {
 
 // Static Korean Lotto data (real results, updated periodically)
 const STATIC_LOTTO_DATA = [
+  {round:1221,date:'2026-04-25',main:[6,13,18,28,30,36],special:9},
   {round:1220,date:'2026-04-18',main:[2,22,25,28,34,43],special:16},
   {round:1219,date:'2026-04-11',main:[1,2,15,28,39,45],special:31},
   {round:1218,date:'2026-04-04',main:[3,28,31,32,42,45],special:25},
@@ -309,7 +310,7 @@ const STATIC_LOTTO_DATA = [
   {round:1168,date:'2025-04-19',main:[9,21,24,30,33,37],special:29},
   {round:1167,date:'2025-04-12',main:[8,23,31,35,39,40],special:24},
   {round:1166,date:'2025-04-05',main:[14,23,25,27,29,42],special:16},
-  {round:1165,date:'2025-03-29',main:[6,7,27,29,38,45],special:17},
+  {round:1165,date:'2025-03-29',main:[6,7,27,29,38,45],special:17}
 ];
 
 // Fallback: use static data for lotto, generate random for US games
