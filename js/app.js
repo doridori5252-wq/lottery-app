@@ -61,7 +61,7 @@ const GAMES = {
 const pastResults = { powerball: [], mega: [], lotto: [] };
 const jackpotData = { powerball: null, mega: null, lotto: null };
 const CACHE_KEY = 'luckyai_results_cache';
-const CACHE_EXPIRY = 1000 * 60 * 60; // 1 hour
+const CACHE_EXPIRY = 1000 * 60 * 15; // 15 minutes (keeps the latest draw fresh)
 
 // API endpoints
 const API = {
@@ -150,47 +150,80 @@ async function fetchMegaMillions() {
   }
 }
 
-// Fetch Korean Lotto results
-// Strategy: Netlify Function (deployed) → CORS proxies → fallback
-async function fetchKoreanLotto() {
-  // Estimate latest round number (started 2002-12-07, draws every Saturday)
-  const startDate = new Date('2002-12-07');
-  const now = new Date();
-  const diffWeeks = Math.floor((now - startDate) / (7 * 24 * 60 * 60 * 1000));
-  const latestRound = diffWeeks;
+// Korean Lotto draw config (Round 1 was drawn 2002-12-07, every Saturday 20:45 KST)
+const LOTTO_START_DATE = new Date('2002-12-07T00:00:00+09:00');
+const LOTTO_FETCH_COUNT = 60; // how many recent rounds to pull live
 
-  // Determine fetcher: Netlify Function or CORS proxy
-  const fetcher = await findWorkingFetcher(latestRound);
+// Estimate an upper-bound round number. We intentionally overshoot by a small
+// margin so we never undershoot the genuine latest round, then probe downward
+// to the round that has actually been drawn.
+function estimateLatestRound() {
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const weeks = Math.floor((Date.now() - LOTTO_START_DATE.getTime()) / week);
+  // Round 1 == week 0, so round = weeks + 1; add +1 safety margin.
+  return weeks + 2;
+}
+
+// Fetch Korean Lotto results in real time
+// Strategy: Netlify Function (deployed) → CORS proxies → static fallback
+async function fetchKoreanLotto() {
+  const estLatest = estimateLatestRound();
+
+  // Detect a working fetcher against a round that definitely exists, so a
+  // not-yet-drawn newest round can't make us think every fetcher is broken.
+  const probeRound = Math.max(1, estLatest - 6);
+  const fetcher = await findWorkingFetcher(probeRound);
   if (!fetcher) {
-    console.log('Korean Lotto: all methods failed');
+    console.log('Korean Lotto: no working fetcher, using static data');
     if (!pastResults.lotto.length) generateFallbackResults('lotto');
     return;
   }
 
-  // Fetch 100 rounds in batches of 20
-  const allResults = [];
-  for (let batch = 0; batch < 5; batch++) {
+  // Find the true latest *drawn* round by probing downward from the estimate.
+  const latestRound = await findActualLatestRound(estLatest, fetcher);
+  if (!latestRound) {
+    console.log('Korean Lotto: could not resolve latest round, using static data');
+    if (!pastResults.lotto.length) generateFallbackResults('lotto');
+    return;
+  }
+
+  // Fetch the recent rounds in batches.
+  const live = [];
+  const batchSize = 15;
+  for (let start = 0; start < LOTTO_FETCH_COUNT; start += batchSize) {
     const promises = [];
-    for (let i = 0; i < 20; i++) {
-      const round = latestRound - (batch * 20) - i;
+    for (let i = 0; i < batchSize; i++) {
+      const round = latestRound - start - i;
       if (round < 1) break;
       promises.push(fetchLottoRound(round, fetcher));
     }
-    const results = await Promise.allSettled(promises);
-    const valid = results
-      .filter(r => r.status === 'fulfilled' && r.value)
-      .map(r => r.value);
-    allResults.push(...valid);
-    if (valid.length < 5 && batch > 0) break;
+    const settled = await Promise.allSettled(promises);
+    const valid = settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+    live.push(...valid);
+    if (valid.length === 0 && start > 0) break;
   }
 
-  if (allResults.length > 0) {
-    pastResults.lotto = allResults.sort((a, b) => b.round - a.round);
-    console.log(`Korean Lotto: ${pastResults.lotto.length} results loaded`);
-  } else {
-    console.log('Korean Lotto: no results fetched');
-    if (!pastResults.lotto.length) generateFallbackResults('lotto');
+  // Merge live results over the static baseline (live wins, newest first) so the
+  // app always shows the freshest available round while keeping full history.
+  pastResults.lotto = mergeLottoResults(live);
+  console.log(`Korean Lotto: latest round ${latestRound}, ${live.length} live results merged (total ${pastResults.lotto.length})`);
+}
+
+// Probe downward from the estimate to find the newest round actually drawn.
+async function findActualLatestRound(estimate, fetcher) {
+  for (let round = estimate; round >= 1 && round > estimate - 10; round--) {
+    const data = await fetchLottoRound(round, fetcher);
+    if (data) return data.round;
   }
+  return null;
+}
+
+// Merge live fetched rounds with the static baseline (live overrides, sorted desc).
+function mergeLottoResults(live) {
+  const byRound = new Map();
+  for (const r of STATIC_LOTTO_DATA) byRound.set(r.round, { ...r });
+  for (const r of live) byRound.set(r.round, r); // live data wins
+  return [...byRound.values()].sort((a, b) => b.round - a.round);
 }
 
 async function findWorkingFetcher(testRound) {
@@ -385,6 +418,61 @@ async function forceRefreshResults() {
   if (state.currentPage === 'stats') renderStats();
   if (state.currentPage === 'results') renderResultsPage();
   showToast('✅ 최신 당첨번호가 업데이트되었습니다!');
+}
+
+// ==================== REAL-TIME UPDATES ====================
+let realtimeTimer = null;
+
+// Next Korean lotto draw: every Saturday 20:45 KST. Computed independently of
+// the browser's local timezone so the countdown is correct anywhere.
+function getNextLottoDrawDate() {
+  const now = new Date();
+  const toKstShift = (now.getTimezoneOffset() + 540) * 60000; // local -> KST wall clock
+  const kstNow = new Date(now.getTime() + toKstShift);
+  const draw = new Date(kstNow);
+  draw.setHours(20, 45, 0, 0);
+  let addDays = (6 - kstNow.getDay() + 7) % 7; // days until Saturday (0 = today)
+  if (addDays === 0 && kstNow.getTime() > draw.getTime()) addDays = 7; // today's draw passed
+  draw.setDate(draw.getDate() + addDays);
+  return new Date(draw.getTime() - toKstShift); // back to true epoch
+}
+
+function formatCountdown(ms) {
+  if (ms < 0) ms = 0;
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  if (d > 0) return `${d}일 ${h}시간 ${m}분`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function updateLottoCountdown() {
+  const el = document.getElementById('lotto-countdown');
+  if (!el) return;
+  el.textContent = formatCountdown(getNextLottoDrawDate().getTime() - Date.now());
+}
+
+// Periodically pull the latest Korean lotto result so a freshly drawn round
+// appears automatically, and tick the next-draw countdown every second.
+function startRealtimeUpdates() {
+  updateLottoCountdown();
+  setInterval(updateLottoCountdown, 1000);
+
+  if (realtimeTimer) clearInterval(realtimeTimer);
+  realtimeTimer = setInterval(async () => {
+    if (document.hidden) return; // skip when tab is in background
+    const prevLatest = pastResults.lotto[0]?.round;
+    await fetchKoreanLotto();
+    cacheResults();
+    const newLatest = pastResults.lotto[0]?.round;
+    if (newLatest && newLatest !== prevLatest) {
+      renderHome();
+      if (state.currentPage === 'results') renderResultsPage();
+      if (state.currentPage === 'stats') renderStats();
+      showToast(`🎉 ${newLatest}회 당첨번호가 실시간 업데이트되었습니다!`);
+    }
+  }, 1000 * 60 * 3); // check every 3 minutes
 }
 
 // ==================== UTILITY FUNCTIONS ====================
@@ -1134,14 +1222,14 @@ async function updateJackpotDisplay() {
   // Fetch jackpot from powerball.com API (unofficial)
   await fetchJackpots();
 
-  // Korean Lotto - use static first prize amount from latest data
+  // Korean Lotto - show estimated first prize + latest live round info
   const lottoEl = document.getElementById('jackpot-kr');
   if (lottoEl && pastResults.lotto.length > 0) {
     const latest = pastResults.lotto[0];
     lottoEl.textContent = `약 30억원`;
-    // Update date info
-    const dateEl = lottoEl.parentElement.querySelector('.jackpot-date');
-    if (dateEl) dateEl.textContent = `최근 추첨: ${latest.date} (${latest.round}회)`;
+    // Latest round line (kept separate from the countdown line)
+    const roundEl = document.getElementById('jackpot-kr-round');
+    if (roundEl) roundEl.textContent = `최근 추첨: ${latest.round}회 (${latest.date})`;
   }
 }
 
@@ -2019,8 +2107,14 @@ async function initApp() {
     document.getElementById('app').classList.remove('hidden');
   }, 1500);
 
+  // Start the next-draw countdown immediately (independent of network).
+  updateLottoCountdown();
+
   // Fetch real data from APIs (async, updates UI when done)
   await fetchAllResults();
+
+  // Begin real-time auto-refresh + live countdown.
+  startRealtimeUpdates();
 }
 
 // Canvas roundRect polyfill
