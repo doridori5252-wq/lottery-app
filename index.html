@@ -56,9 +56,10 @@
         <div class="jackpot-slide" data-game="lotto">
           <div class="jackpot-flag">KR</div>
           <div class="jackpot-info">
-            <span class="jackpot-name">로또 6/45</span>
+            <span class="jackpot-name">로또 6/45 <span class="live-badge">● LIVE</span></span>
             <span class="jackpot-amount" id="jackpot-kr">로딩중...</span>
-            <span class="jackpot-date">추첨: 매주 토요일 오후 8:45</span>
+            <span class="jackpot-date" id="jackpot-kr-round">최근 당첨번호 불러오는 중...</span>
+            <span class="jackpot-date">다음 추첨까지 <b id="lotto-countdown">--:--:--</b> · 매주 토 20:45</span>
           </div>
         </div>
         <div class="jackpot-dots">
@@ -106,7 +107,7 @@
 
       <!-- Recent Results -->
       <div class="section-header">
-        <h2>📋 최근 당첨번호</h2>
+        <h2>📋 최근 당첨번호 <span class="live-badge">● LIVE</span></h2>
         <button class="text-btn" onclick="navigateTo('results')">전체보기 →</button>
       </div>
       <div class="recent-results" id="recent-results">
