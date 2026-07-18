@@ -1,5 +1,5 @@
 // Auto-versioning: changes every time the file is updated (GitHub Actions will modify this)
-const CACHE_VERSION = '2026-07-11';
+const CACHE_VERSION = '2026-07-18';
 const CACHE_NAME = `luckyai-${CACHE_VERSION}`;
 const ASSETS = [
   './',
