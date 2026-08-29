@@ -254,6 +254,7 @@ async function fetchLottoRound(round, fetcher) {
 
 // Static Korean Lotto data (real results, updated periodically)
 const STATIC_LOTTO_DATA = [
+  {round:1238,date:'2026-08-22',main:[2,13,18,32,38,42],special:22},
   {round:1237,date:'2026-08-15',main:[10,20,23,34,37,40],special:36},
   {round:1236,date:'2026-08-08',main:[12,18,21,29,34,38],special:10},
   {round:1235,date:'2026-08-01',main:[6,7,11,15,39,43],special:20},
