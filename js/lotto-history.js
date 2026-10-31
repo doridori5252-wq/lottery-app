@@ -3,18 +3,18 @@
 // Format: { number: [winning_count, bonus_count, total_count] }
 const LOTTO_FULL_FREQ = {
   1:[134,18,152], 2:[116,27,143], 3:[132,29,161], 4:[123,28,151], 5:[118,21,139],
-  6:[132,27,159], 7:[135,24,159], 8:[127,15,142], 9:[112,22,134], 10:[131,25,156],
-  11:[127,24,151], 12:[149,26,175], 13:[146,26,172], 14:[128,23,151], 15:[134,25,159],
+  6:[132,27,159], 7:[135,24,159], 8:[128,15,143], 9:[112,22,134], 10:[131,25,156],
+  11:[127,24,151], 12:[149,26,175], 13:[146,26,172], 14:[129,23,152], 15:[134,25,159],
   16:[133,27,160], 17:[131,26,157], 18:[134,24,158], 19:[124,23,147], 20:[136,27,163],
-  21:[123,29,151],22:[114,25,139],23:[113,24,137],24:[139,27,166],25:[108,27,135],
+  21:[124,29,152],22:[115,25,140],23:[113,24,137],24:[139,28,167],25:[108,27,135],
   26:[128,27,155],27:[138,28,166],28:[123,26,149],29:[119,22,141],30:[126,24,150],
   31:[133,25,158],32:[120,25,145],33:[137,26,163],34:[141,26,167],35:[121,26,147],
   36:[120,24,144],37:[123,24,147],38:[143,25,168],39:[123,23,146],40:[129,23,152],
-  41:[114,25,139],42:[115,25,140],43:[132,24,156],44:[125,24,149],45:[134,27,161]
+  41:[114,25,139],42:[116,25,141],43:[132,24,156],44:[125,24,149],45:[135,27,162]
 };
 
 // Total rounds analyzed
-const LOTTO_TOTAL_ROUNDS = 1246;
+const LOTTO_TOTAL_ROUNDS = 1247;
 
 // Pre-computed sorted rankings
 const LOTTO_HOT_NUMS = Object.entries(LOTTO_FULL_FREQ)
@@ -33,5 +33,5 @@ const LOTTO_HOT_BONUS = Object.entries(LOTTO_FULL_FREQ)
 // Pre-computed top co-occurring pairs (recent 51 rounds, auto-updated by GitHub Actions)
 // Format: { pair: [a, b], count: N }
 const LOTTO_TOP_PAIRS = [
-  {pair:[16,23],count:6},{pair:[27,38],count:6},{pair:[16,24],count:5},{pair:[18,38],count:5},{pair:[9,24],count:5},{pair:[16,31],count:5},{pair:[37,40],count:5},{pair:[15,19],count:5},{pair:[3,42],count:5},{pair:[13,28],count:5},{pair:[27,36],count:5},{pair:[7,9],count:5},{pair:[16,28],count:4},{pair:[22,28],count:4},{pair:[23,27],count:4},{pair:[4,32],count:4},{pair:[28,42],count:4},{pair:[32,42],count:4},{pair:[13,18],count:4},{pair:[13,38],count:4},{pair:[24,44],count:4},{pair:[4,41],count:4},{pair:[7,43],count:4},{pair:[31,44],count:4},{pair:[23,40],count:4},{pair:[6,28],count:4},{pair:[9,19],count:4},{pair:[8,31],count:4},{pair:[3,15],count:4},{pair:[25,31],count:4}
+  {pair:[16,23],count:6},{pair:[27,38],count:6},{pair:[16,24],count:5},{pair:[18,38],count:5},{pair:[9,24],count:5},{pair:[16,31],count:5},{pair:[37,40],count:5},{pair:[15,19],count:5},{pair:[3,42],count:5},{pair:[13,28],count:5},{pair:[27,36],count:5},{pair:[7,9],count:5},{pair:[8,42],count:4},{pair:[16,28],count:4},{pair:[22,28],count:4},{pair:[23,27],count:4},{pair:[4,32],count:4},{pair:[28,42],count:4},{pair:[32,42],count:4},{pair:[13,18],count:4},{pair:[13,38],count:4},{pair:[24,44],count:4},{pair:[4,41],count:4},{pair:[7,43],count:4},{pair:[31,44],count:4},{pair:[23,40],count:4},{pair:[6,28],count:4},{pair:[9,19],count:4},{pair:[8,31],count:4},{pair:[3,15],count:4}
 ];
